@@ -7,7 +7,7 @@ SDL3 (dynamically linked)
 # BUILD
 
 ```
-meson configure build
+meson setup build
 meson compile -C build
 and ./build/main to run
 ```
