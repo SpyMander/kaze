@@ -1,19 +1,19 @@
 
 # REQUIREMENTS
 
+pkgconf or pkg-config
 vulkan (dynamically linked)
-SDL3 (dynamically linked)
+vulkan-devel 
+SDL3 will be compiled inside.
 
 # BUILD
 
 ```
+meson wrap install sdl3
 meson setup build
 meson compile -C build
 and ./build/main to run
 ```
-
-you also need the shaders to be in the 
-build directory.
 
 ## shader compile:
 
