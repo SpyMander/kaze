@@ -9,6 +9,7 @@ SDL3 will be compiled inside.
 # BUILD
 
 ```
+mkdir subprojects
 meson wrap install sdl3
 meson setup build
 meson compile -C build
