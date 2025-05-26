@@ -1,10 +1,10 @@
 
 # REQUIREMENTS
 
-pkgconf or pkg-config
-vulkan (dynamically linked)
-vulkan-devel 
-SDL3 will be compiled inside.
+pkgconf or pkg-config <br />
+vulkan (dynamically linked) <br />
+vulkan-devel <br />
+SDL3 will be compiled inside. <br />
 
 # BUILD
 
