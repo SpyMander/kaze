@@ -638,7 +638,7 @@ kaze::createRasterizationInfo(bool wireframe) {
   return rasterizer;
 }
 
-
+// HARDCODED
 VkPipelineVertexInputStateCreateInfo
 createVertexInputStateInfo () {
   // i might add arguments to the function too.
@@ -664,13 +664,16 @@ createInputAssemblyStateinfo() {
     VkPipelineInputAssemblyStateCreateInfo inputAssembly {};
     inputAssembly.sType =
       VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-
+ 
+    // HARDCODED, a real use for VK_PRIMITIVE_TOPOLOGY_POINT_LIST
+    // or line list
     inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     inputAssembly.primitiveRestartEnable = VK_FALSE;
 
     return inputAssembly;
 }
 
+// HARDCODED
 // TODO: this shit is hardcoded, the subpasses need to be
 // more dynamic, fix this.
 VkRenderPass kaze::createRenderPass(VkFormat swapchainImageFormat,
@@ -690,6 +693,7 @@ VkRenderPass kaze::createRenderPass(VkFormat swapchainImageFormat,
   // we dont care what format it is initialy, since we clear it.
   colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
+  // HARDCODED
   // VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL for copying in memory
   // also, this means that it will only be used for presenting aka swapchain
   colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -770,6 +774,7 @@ kaze::createPipelineLayout(const PipelineCreationInfo info) {
     vertexInputCreateInfo.sType =
       VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
+    // HARDCODED
     // TODO: THIS WILL BE CHANGED, since we will pass vertexes
     // CHANGED !!! 
     vertexInputCreateInfo.vertexBindingDescriptionCount = 0;

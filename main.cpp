@@ -1,7 +1,7 @@
-#include <SDL3/SDL_events.h>
+#include<SDL3/SDL_events.h>
 #include<SDL3/SDL_filesystem.h>
-#include <SDL3/SDL_init.h>
-#include <SDL3/SDL_oldnames.h>
+#include<SDL3/SDL_init.h>
+#include<SDL3/SDL_oldnames.h>
 #include<SDL3/SDL_timer.h>
 #include<cstdint>
 #include<iostream>
@@ -19,7 +19,7 @@
 
 #define INITIAL_WIDTH 800
 #define INITIAL_HEIGHT 600
-#define FRAMES_IN_FLIGHT 3
+#define FRAMES_IN_FLIGHT 4
 #define KAZE_VALIDATION_LAYERS
 
 int main() {
@@ -44,7 +44,7 @@ int main() {
 
   SDL_Window* window;
   window = SDL_CreateWindow("window :*", INITIAL_WIDTH, INITIAL_HEIGHT,
-			    SDL_WINDOW_VULKAN | SDL_WINDOW_BORDERLESS);
+			    SDL_WINDOW_VULKAN | SDL_WINDOW_BORDERLESS | SDL_WINDOW_RESIZABLE);
   //| SDL_WINDOW_RESIZABLE
 
   if (!window) {
@@ -188,14 +188,13 @@ int main() {
     }
 
     vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
-    vkResetFences(device, 1,  &inFlightFences[currentFrame]);
-
     uint32_t imageIndex;
-    vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
-
-    //std::cout << "current swapchain image index: " << imageIndex << std::endl;
+    VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+        vkResetFences(device, 1,  &inFlightFences[currentFrame]);
 
     vkResetCommandBuffer(cmdBuffers[currentFrame], 0);
+
+
     kaze::startCommandBuffer(cmdBuffers[currentFrame], swapchainFramebuffers[imageIndex], renderPass, swapchainExtent);
     kaze::testBG(cmdBuffers[currentFrame], graphicsPipeline, swapchainExtent);
     kaze::endCommandBuffer(cmdBuffers[currentFrame]);
@@ -234,11 +233,47 @@ int main() {
     presentInfo.pImageIndices = &imageIndex;
 
     vkQueuePresentKHR(presentQueue, &presentInfo);
+
+    // window resize handle. it has to be down here because of sync complications
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR){
+      std::cout << "out of date!!!" << std::endl; 
+      vkDeviceWaitIdle(device);
+
+      for (auto imageView : swapchainImageViews) {
+        vkDestroyImageView(device, imageView, nullptr);
+      }
+      for (auto framebuffer : swapchainFramebuffers) {
+        vkDestroyFramebuffer(device, framebuffer, nullptr);
+      }
+
+      vkDestroySwapchainKHR(device, swapchain, nullptr);
+
+
+
+      std::tie(swapchain, swapchainImages,
+          swapchainImageFormat, swapchainExtent) =
+        kaze::createSwapchain(physicalDevice, device, windowSurface, window,
+            queueFamilyIndices);
+
+      swapchainImageViews =
+        kaze::createSwapchainImageViews(swapchainImages, swapchainImageFormat,
+            device);
+
+      swapchainFramebuffers =
+        kaze::createSwapchainFramebuffers(swapchainImageViews,
+            swapchainExtent, renderPass,
+            device);
+
+
+      currentFrame = (currentFrame + 1) % FRAMES_IN_FLIGHT;
+      continue;
+    }
+
     currentFrame = (currentFrame + 1) % FRAMES_IN_FLIGHT;
 
     SDL_Delay(1000/90);
   }
-
+  vkDeviceWaitIdle(device);
   
 
   // std::cin.get();
