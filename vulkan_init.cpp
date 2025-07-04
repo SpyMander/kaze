@@ -5,6 +5,7 @@
 #include"vulkan_validation_layers.hpp"
 #include"error_handling.hpp"
 
+#include <cstdint>
 #include<iostream>
 #include<vector>
 #include<set>
@@ -361,16 +362,16 @@ kaze::chooseSwapchainSurfaceFormat(const std::vector<VkSurfaceFormatKHR>&
 
 VkPresentModeKHR
 kaze::chooseSwapchainPresentMode(const std::vector<VkPresentModeKHR>&
-				 availablePresentModes) {
+				 availablePresentModes, VkPresentModeKHR presentMode) {
 
-  for (const auto& presentMode : availablePresentModes) {
-    if (presentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
-      std::cout<<"warn: using mailbox present mode!" << std::endl;
-      return presentMode;
+  for (const auto& mode : availablePresentModes) {
+    if (mode == presentMode) {
+      return mode;
     }
   }
 
-  return VK_PRESENT_MODE_FIFO_KHR;
+  std::cout<< "using default immidiate mode presentation" << std::endl;
+  return VK_PRESENT_MODE_IMMEDIATE_KHR;
 }
 
 VkExtent2D
@@ -402,9 +403,9 @@ kaze::chooseSwapchainExtent(const VkSurfaceCapabilitiesKHR& capabilities,
 
 std::tuple<VkSwapchainKHR, std::vector<VkImage>, VkFormat, VkExtent2D>
 kaze::createSwapchain(const VkPhysicalDevice physicalDevice,
-		      const VkDevice device,
-		      const VkSurfaceKHR surface, SDL_Window* window,
-		      const QueueFamilyIndices indices) {
+                      const VkDevice device, const VkSurfaceKHR surface,
+                      SDL_Window *window, const QueueFamilyIndices indices,
+                      const VkPresentModeKHR desiredPresentMode) {
 
   SwapchainSupportDetails swapchainSupportDetails =
     querySwapchainSupportDetails(physicalDevice, surface);
@@ -413,20 +414,18 @@ kaze::createSwapchain(const VkPhysicalDevice physicalDevice,
     chooseSwapchainSurfaceFormat(swapchainSupportDetails.formats);
 
   VkPresentModeKHR presentMode = 
-    chooseSwapchainPresentMode(swapchainSupportDetails.presentModes);
+    chooseSwapchainPresentMode(swapchainSupportDetails.presentModes, desiredPresentMode);
 
   VkExtent2D extent =
     chooseSwapchainExtent(swapchainSupportDetails.capabilities, window);
 
-  // it is possilbe to add buffer frames here?
-  uint32_t imageCount =
-    swapchainSupportDetails.capabilities.minImageCount + 1;
+  uint32_t imageCount = swapchainSupportDetails.capabilities.minImageCount;
 
   std::cout << "swapchain image min count: " << imageCount << std::endl;
 
   if (swapchainSupportDetails.capabilities.maxImageCount != 0 &&
       imageCount > swapchainSupportDetails.capabilities.maxImageCount) {
-    std::cout<< "swapchain, image count: " 
+    std::cout<< "reached max swapchain count, setting it to: " 
 	     << swapchainSupportDetails.capabilities.maxImageCount
 	     << std::endl;
 

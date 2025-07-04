@@ -72,7 +72,7 @@ namespace kaze {
 
   VkPresentModeKHR
   chooseSwapchainPresentMode(const std::vector<VkPresentModeKHR>&
-			     availablePresentModes);
+			     availablePresentModes, VkPresentModeKHR presentMode);
 
   VkExtent2D
   chooseSwapchainExtent(const VkSurfaceCapabilitiesKHR& capabilities,
@@ -83,10 +83,10 @@ namespace kaze {
 			       availableFormats);
 
   std::tuple<VkSwapchainKHR, std::vector<VkImage>, VkFormat, VkExtent2D>
-  createSwapchain(const VkPhysicalDevice physicalDevice,
-		  const VkDevice device,
-		  const VkSurfaceKHR surface, SDL_Window* window,
-		  const QueueFamilyIndices indices);
+  createSwapchain(const VkPhysicalDevice physicalDevice, const VkDevice device,
+                  const VkSurfaceKHR surface, SDL_Window *window,
+                  const QueueFamilyIndices indices,
+                  const VkPresentModeKHR desiredPresentMode);
   
 
   std::vector<VkImageView>

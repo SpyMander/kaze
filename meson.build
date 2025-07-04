@@ -13,12 +13,12 @@ src = [
 vulkan_dep = dependency('vulkan', required: true)
 sdl_dep = dependency('sdl3', required: true)
 
-add_project_link_arguments([
-  '-lvulkan',
-  '-lSDL3'
-], language: 'cpp')
+#add_project_link_arguments([
+#  '-lvulkan',
+#  '-lSDL3'
+#], language: 'cpp')
 
-add_project_arguments('-g', language: 'cpp')
+#add_project_arguments('-g', language: 'cpp')
 executable('main', src,
            dependencies: [ sdl_dep, vulkan_dep ])
 

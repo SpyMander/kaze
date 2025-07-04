@@ -12,15 +12,21 @@
 #include"vulkan_validation_layers.hpp"
 #include"shaders.hpp"
 
-#include<vulkan/vulkan.h>
-#include<SDL3/SDL.h>
-#include<SDL3/SDL_vulkan.h>
+#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
 #include <vulkan/vulkan_core.h>
 
 #define INITIAL_WIDTH 800
 #define INITIAL_HEIGHT 600
-#define FRAMES_IN_FLIGHT 4
+#define FRAMES_IN_FLIGHT 2
 #define KAZE_VALIDATION_LAYERS
+
+// no fps cap
+#define DEFAULT_PRESENT_MODE VK_PRESENT_MODE_IMMEDIATE_KHR
+
+//#define DEFAULT_PRESENT_MODE VK_PRESENT_MODE_FIFO_KHR
 
 int main() {
   #ifdef KAZE_VALIDATION_LAYERS
@@ -91,10 +97,10 @@ int main() {
   VkExtent2D swapchainExtent;
 
   // crazy
-  std::tie(swapchain, swapchainImages,
-	   swapchainImageFormat, swapchainExtent) =
-    kaze::createSwapchain(physicalDevice, device, windowSurface, window,
-			  queueFamilyIndices);
+  std::tie(swapchain, swapchainImages, swapchainImageFormat, swapchainExtent) =
+      kaze::createSwapchain(physicalDevice, device, windowSurface, window,
+                            queueFamilyIndices,
+                            DEFAULT_PRESENT_MODE);
 
   std::vector<VkImageView> swapchainImageViews;
   swapchainImageViews =
@@ -157,11 +163,14 @@ int main() {
   VkCommandPool cmdPool =
     kaze::createCommandPool(queueFamilyIndices, device);
 
-  std::vector<VkCommandBuffer> cmdBuffers(FRAMES_IN_FLIGHT);
-  std::vector<VkSemaphore> imageAvailableSemaphores(FRAMES_IN_FLIGHT);
-  std::vector<VkSemaphore> renderFinishedSemaphores(FRAMES_IN_FLIGHT);
-  std::vector<VkFence> inFlightFences(FRAMES_IN_FLIGHT);
-  for (int i{}; i < FRAMES_IN_FLIGHT; i++) {
+  std::vector<VkCommandBuffer> cmdBuffers(swapchainImages.size());
+  std::vector<VkSemaphore> imageAvailableSemaphores(swapchainImages.size());
+  std::vector<VkSemaphore> renderFinishedSemaphores(swapchainImages.size());
+  std::vector<VkFence> inFlightFences(swapchainImages.size());
+  // this dude lets you know if the frame is being processed.
+  std::vector<VkFence> imagesInFlightFences(swapchainImages.size(), VK_NULL_HANDLE);
+
+  for (uint i{}; i < swapchainImages.size(); i++) {
     // each for swapchain image.
     cmdBuffers[i] =
       kaze::createCommandBuffer(cmdPool, device);
@@ -188,16 +197,27 @@ int main() {
     }
 
     vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+
     uint32_t imageIndex;
     VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
-        vkResetFences(device, 1,  &inFlightFences[currentFrame]);
 
-    vkResetCommandBuffer(cmdBuffers[currentFrame], 0);
+    // if the fence is active
+    if (imagesInFlightFences[imageIndex] != VK_NULL_HANDLE) {
+      vkWaitForFences(device, 1, &imagesInFlightFences[imageIndex], VK_TRUE,
+		      UINT64_MAX);
+    }
+
+    imagesInFlightFences[imageIndex] = inFlightFences[currentFrame];
+
+    vkResetFences(device, 1,  &inFlightFences[currentFrame]);
+
+    vkResetCommandBuffer(cmdBuffers[imageIndex], 0);
+    
 
 
-    kaze::startCommandBuffer(cmdBuffers[currentFrame], swapchainFramebuffers[imageIndex], renderPass, swapchainExtent);
-    kaze::testBG(cmdBuffers[currentFrame], graphicsPipeline, swapchainExtent);
-    kaze::endCommandBuffer(cmdBuffers[currentFrame]);
+    kaze::startCommandBuffer(cmdBuffers[imageIndex], swapchainFramebuffers[imageIndex], renderPass, swapchainExtent);
+    kaze::testBG(cmdBuffers[imageIndex], graphicsPipeline, swapchainExtent);
+    kaze::endCommandBuffer(cmdBuffers[imageIndex]);
 
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -210,9 +230,9 @@ int main() {
     submitInfo.pWaitDstStageMask = waitStages;
 
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &cmdBuffers[currentFrame];
+    submitInfo.pCommandBuffers = &cmdBuffers[imageIndex];
 
-    VkSemaphore signalSemaphores[] = {renderFinishedSemaphores[currentFrame]};
+    VkSemaphore signalSemaphores[] = {renderFinishedSemaphores[imageIndex]};
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
 
@@ -253,7 +273,7 @@ int main() {
       std::tie(swapchain, swapchainImages,
           swapchainImageFormat, swapchainExtent) =
         kaze::createSwapchain(physicalDevice, device, windowSurface, window,
-            queueFamilyIndices);
+			      queueFamilyIndices, DEFAULT_PRESENT_MODE);
 
       swapchainImageViews =
         kaze::createSwapchainImageViews(swapchainImages, swapchainImageFormat,
@@ -271,7 +291,7 @@ int main() {
 
     currentFrame = (currentFrame + 1) % FRAMES_IN_FLIGHT;
 
-    SDL_Delay(1000/90);
+    SDL_Delay(1000/144);
   }
   vkDeviceWaitIdle(device);
   
