@@ -1,44 +1,52 @@
 
-// this file makes it easier to create and initate vulkan files
-
-#include"vulkan_init.hpp"
-#include"vulkan_validation_layers.hpp"
-#include"error_handling.hpp"
+/*
+// PURPOSE: simplify and abstract making vulkan stuff.
+*/
+#include "vulkan_init.hpp"
+#include "vulkan_validation_layers.hpp"
+#include "error_handling.hpp"
 
 #include <cstdint>
-#include<iostream>
-#include<vector>
-#include<set>
-#include<algorithm>
-#include<vulkan/vulkan.h>
-#include<SDL3/SDL_video.h>
-#include<SDL3/SDL_vulkan.h>
-#include<vulkan/vulkan_core.h>
+#include <iostream>
+#include <vector>
+#include <set>
+#include <algorithm>
+#include <vulkan/vulkan.h>
+#include <SDL3/SDL_video.h>
+#include <SDL3/SDL_vulkan.h>
+#include <vulkan/vulkan_core.h>
 
+// PURPOSE: see if the queue has present and
+// graphics families. returns false if it 
+// doesn't.
 bool kaze::QueueFamilyIndices::isComplete() {
   bool result = ( graphicsFamily.has_value()
 		  && presentFamily.has_value() );
   if (!result) {
-    //std::cerr<< "queue family not complete" << std::endl;
+    //std::cerr<< "queue family not complete" << '\n';
     //exit(1);
   }
   return result;
 }
 
+// maybe the desired extentions being a global value is kinda bad?
+// TODO: pass in the desired DeviceExtentions
 bool checkDeviceExtensionSupport(VkPhysicalDevice device) { //internal
+  // get extention count, of the device.
   uint32_t extensionCount;
   vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount,
 				       nullptr);
 
+  // get the actual list of extensions that the device has.
+  // by filling up the vector.
   std::vector<VkExtensionProperties> availableExtensions(extensionCount);
   vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount,
 				       availableExtensions.data());
 
-  // this confused me, i thought it was a function, it's a constructor lol.
 
   std::set<std::string>
-    requiredExtensions(kaze::deviceExtensions.begin(),
-		       kaze::deviceExtensions.end());
+    requiredExtensions(kaze::gDeviceExtensions.begin(),
+		       kaze::gDeviceExtensions.end());
 
   for (const auto& extension : availableExtensions) {
     requiredExtensions.erase(extension.extensionName);
@@ -97,6 +105,9 @@ kaze::isDeviceSuitable(const VkPhysicalDevice vkPhysicalDevice,
   return {suitable, familyIndices};
 }
 
+// important to know: this tries to find ONE physical device that has 
+// features and such. obviously returns the queueFamily 
+// with the physical device
 std::pair<VkPhysicalDevice, kaze::QueueFamilyIndices>
 kaze::getPhysicalDevice(const VkInstance vkInstance,
 			const VkSurfaceKHR surface) {
@@ -130,10 +141,8 @@ kaze::getPhysicalDevice(const VkInstance vkInstance,
     kaze::errorExit("couldn't find suitable physical device");
   }
 
-  // the whole reason of this is to do less allocations
   return {physicalDevice, familyIndices};
 }
-
 
 kaze::QueueFamilyIndices
 kaze::findQueueFamilies(const VkPhysicalDevice vkPhysicalDevice,
@@ -150,8 +159,6 @@ kaze::findQueueFamilies(const VkPhysicalDevice vkPhysicalDevice,
 					   queueFamilies.data());
 					  
 
-  // i do not understand whats happening here, i need to understand flags.
-  // this might cause big issues.
   int i = 0;
   for (const auto& queueFamily : queueFamilies) {
     if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
@@ -208,7 +215,8 @@ getDeviceQueueCreateInfo(const kaze::QueueFamilyIndices indices) {
   return queueCreateInfo;
 }
 
-VkDevice kaze::createVkDevice(const VkPhysicalDevice vkPhysicalDevice,
+VkDevice
+kaze::createVkDevice(const VkPhysicalDevice vkPhysicalDevice,
 			      const QueueFamilyIndices indices) {
 
   //TODO: very important thing here, take more care
@@ -230,9 +238,9 @@ VkDevice kaze::createVkDevice(const VkPhysicalDevice vkPhysicalDevice,
 
   // the extentions have already been tested, this is fine.
   deviceCreateInfo.enabledExtensionCount =
-    static_cast<uint32_t>(kaze::deviceExtensions.size());
+    static_cast<uint32_t>(kaze::gDeviceExtensions.size());
 
-  deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
+  deviceCreateInfo.ppEnabledExtensionNames = gDeviceExtensions.data();
 
   // --- magic, TODO: put this in a function
   std::vector<VkDeviceQueueCreateInfo> queueInfos;
@@ -264,7 +272,8 @@ VkDevice kaze::createVkDevice(const VkPhysicalDevice vkPhysicalDevice,
   return vkDevice;
 }
 
-VkInstance kaze::createVkInstance(const bool enableValidationLayers) {
+VkInstance
+kaze::createVkInstance(const bool enableValidationLayers) {
   VkInstance instance;
   
   uint32_t extentionCount;
@@ -299,6 +308,7 @@ VkInstance kaze::createVkInstance(const bool enableValidationLayers) {
 
   return instance;
 }
+
 
 kaze::SwapchainSupportDetails
 kaze::querySwapchainSupportDetails(const VkPhysicalDevice device,
@@ -933,6 +943,7 @@ kaze::createCommandPool(QueueFamilyIndices indicies, VkDevice device) {
   return commandPool;
 }
 
+// TODO: making multiple command buffers may be useful.
 VkCommandBuffer
 kaze::createCommandBuffer(VkCommandPool commandPool, VkDevice device) {
   // somehow you can create multiple of these to render multiple things
@@ -953,6 +964,14 @@ kaze::createCommandBuffer(VkCommandPool commandPool, VkDevice device) {
 
   return commandBuffer;
 }
+
+// TODO: freeing multiple command buffers may be useful.
+void
+kaze::freeCommandBuffer(VkCommandPool commandPool,
+		VkCommandBuffer* pBuffer, VkDevice device) {
+  vkFreeCommandBuffers(device, commandPool, 1, pBuffer);
+}
+
 
 void
 kaze::startCommandBuffer(VkCommandBuffer cmdBuffer, VkFramebuffer frame,
@@ -999,6 +1018,8 @@ kaze::endCommandBuffer(VkCommandBuffer cmdBuffer) {
     kaze::errorExit("couldn't commit/end the command buffer");
   }
 }
+
+
 // ! THIS GUY WILL BE REMOVED !
 void
 kaze::testBG(VkCommandBuffer cmdBuffer, VkPipeline graphicsPipeline,

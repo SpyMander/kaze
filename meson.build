@@ -10,7 +10,9 @@ src = [
   'error_handling.cpp',
 ]
 
+glm_dep = dependency('glm', required: true)
 vulkan_dep = dependency('vulkan', required: true)
+vma_dep = dependency('vulkan-memory-allocator', required: true)
 sdl_dep = dependency('sdl3', required: true)
 
 #add_project_link_arguments([
@@ -20,5 +22,4 @@ sdl_dep = dependency('sdl3', required: true)
 
 #add_project_arguments('-g', language: 'cpp')
 executable('main', src,
-           dependencies: [ sdl_dep, vulkan_dep ])
-
+           dependencies: [ sdl_dep, vulkan_dep, vma_dep, glm_dep ])

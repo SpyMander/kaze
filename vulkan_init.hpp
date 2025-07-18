@@ -11,7 +11,7 @@ class SDL_Window;
 
 namespace kaze {
 
-  const std::vector<const char*> deviceExtensions = {
+  const std::vector<const char*> gDeviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
   };
 
@@ -51,8 +51,9 @@ namespace kaze {
   getPhysicalDevice(const VkInstance vkInstance,
 		    const VkSurfaceKHR surface);
 
-  QueueFamilyIndices findQueueFamilies(const VkPhysicalDevice physicalDevice,
-				       const VkSurfaceKHR surface);
+  QueueFamilyIndices
+  findQueueFamilies(const VkPhysicalDevice physicalDevice,
+		    const VkSurfaceKHR surface);
 
   VkDevice createVkDevice(const VkPhysicalDevice physicalDevice,
 			  const QueueFamilyIndices indices);
@@ -117,6 +118,10 @@ namespace kaze {
 
   VkCommandBuffer
   createCommandBuffer(VkCommandPool commandPool, VkDevice device);
+
+  void
+  freeCommandBuffer(VkCommandPool commandPool,
+		  VkCommandBuffer* buffer, VkDevice device);
  
   void startCommandBuffer(VkCommandBuffer cmdBuffer, VkFramebuffer frame,
 			  VkRenderPass renderPass, VkExtent2D extent);

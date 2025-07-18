@@ -1,16 +1,21 @@
-#include<SDL3/SDL_events.h>
-#include<SDL3/SDL_filesystem.h>
-#include<SDL3/SDL_init.h>
-#include<SDL3/SDL_oldnames.h>
-#include<SDL3/SDL_timer.h>
-#include<cstdint>
-#include<iostream>
-#include<vector>
 
-#include"error_handling.hpp"
-#include"vulkan_init.hpp"
-#include"vulkan_validation_layers.hpp"
-#include"shaders.hpp"
+/*
+honestly this is a demo file for now. to check if everything is working
+ */
+
+#include <SDL3/SDL_events.h>
+#include <SDL3/SDL_filesystem.h>
+#include <SDL3/SDL_init.h>
+#include <SDL3/SDL_oldnames.h>
+#include <SDL3/SDL_timer.h>
+#include <cstdint>
+#include <iostream>
+#include <vector>
+
+#include "error_handling.hpp"
+#include "vulkan_init.hpp"
+#include "vulkan_validation_layers.hpp"
+#include "shaders.hpp"
 
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan.h>
