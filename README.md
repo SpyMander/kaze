@@ -10,10 +10,6 @@ GLM <br />
 # BUILD
 
 ```
-mkdir subprojects
-meson wrap install sdl3
-meson wrap install glm
-meson wrap install vulkan-memory-allocator
 meson setup build
 meson compile -C build
 // ! COMPILE THE SHADERS ! (that is the next step!)

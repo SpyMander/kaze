@@ -10,7 +10,7 @@ src = [
   'error_handling.cpp',
 ]
 
-glm_dep = dependency('glm', required: true)
+glm_dep = dependency('glm', required: true, fallback: ['glm'])
 vulkan_dep = dependency('vulkan', required: true)
 vma_dep = dependency('vulkan-memory-allocator', required: true)
 sdl_dep = dependency('sdl3', required: true)

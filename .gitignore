@@ -3,4 +3,12 @@ build/
 builddir/
 .gdb_history
 *.spv
-subprojects/
+# subprojects/
+[#]*[#]
+*~
+.vscode/
+.meson_cache/
+
+subprojects/*/
+!subprojects/*.wrap
+subprojects/packagecache/
