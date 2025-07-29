@@ -1,4 +1,5 @@
 #include "error_handling.hpp"
+#include "logging.hpp"
 #include <iostream>
 #include <SDL3/SDL_error.h>
 
@@ -11,7 +12,6 @@
 // use cpp 23 print; 
 
 void kaze::errorExit(const char* m) {
-  std::cerr << "[FATAL]: " << m << std::endl;
-  std::cerr << SDL_GetError() << std::endl;
+  kaze::logFatal(m);
   exit(1);
 }

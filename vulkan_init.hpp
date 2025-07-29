@@ -106,7 +106,8 @@ namespace kaze {
 				VkDevice device);
 
   std::pair<VkPipeline, VkPipelineLayout>
-  createPipelineLayout(const PipelineCreationInfo info);
+  createPipelineLayout(const PipelineCreationInfo info,
+		       const VkPipelineVertexInputStateCreateInfo vertexInfo);
 
   std::vector<VkFramebuffer>
   createSwapchainFramebuffers
@@ -123,10 +124,10 @@ namespace kaze {
   freeCommandBuffer(VkCommandPool commandPool,
 		  VkCommandBuffer* buffer, VkDevice device);
  
-  void startCommandBuffer(VkCommandBuffer cmdBuffer, VkFramebuffer frame,
+  void startCommandBufferRenderPass(VkCommandBuffer cmdBuffer, VkFramebuffer frame,
 			  VkRenderPass renderPass, VkExtent2D extent);
   
-  void endCommandBuffer(VkCommandBuffer cmdBuffer);
+  void endCommandBufferRenderPass(VkCommandBuffer cmdBuffer);
 
   // this just makes it easier to create it.
   VkSemaphore

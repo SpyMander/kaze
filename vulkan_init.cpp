@@ -3,11 +3,13 @@
 // PURPOSE: simplify and abstract making vulkan stuff.
 */
 #include "vulkan_init.hpp"
+#include "logging.hpp"
 #include "vulkan_validation_layers.hpp"
 #include "error_handling.hpp"
 
 #include <cstdint>
 #include <iostream>
+#include <string>
 #include <vector>
 #include <set>
 #include <algorithm>
@@ -55,7 +57,7 @@ bool checkDeviceExtensionSupport(VkPhysicalDevice device) { //internal
   // quote from the vulkan tutorial website
   // "The performance difference is irrelevant."
   if (!requiredExtensions.empty()) {
-    std::cerr << "extentions not supported \n";
+    kaze::logFatal("extentions not supported");
     for (const auto& extension : requiredExtensions) {
       std::cerr << extension << "\n";
     }
@@ -82,6 +84,7 @@ kaze::isDeviceSuitable(const VkPhysicalDevice vkPhysicalDevice,
 
   // TODO: too many if statements, make a better system
   if (!familyIndices.isComplete()) {
+    kaze::logWarn("unsuported family indices!");
     return {false, familyIndices};
   }
 
@@ -92,15 +95,26 @@ kaze::isDeviceSuitable(const VkPhysicalDevice vkPhysicalDevice,
 
   else if (swapchainSupportDetails.formats.empty() ||
 	   swapchainSupportDetails.presentModes.empty()) {
+    kaze::logWarn("unsuported swapchainz!");
     return {false, familyIndices};
   }
 
   //TODO: check for 64 bit floats and multi viewport rendering
   bool suitable = false;
 
+  // TODO: do not check here, also we dont need geomentry shaders.
   suitable =
-    (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
-     && deviceFeatures.geometryShader);
+      (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ||
+       deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU);
+  //&& deviceFeatures.multiViewport);
+
+  if (!suitable) {
+    kaze::errorExit("GPU device doesn't have requested features");
+  } else if (deviceProperties.deviceType ==
+             VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) {
+    kaze::logWarn("integrated gpu's might have bugs!");
+  }
+
 
   return {suitable, familyIndices};
 }
@@ -380,7 +394,7 @@ kaze::chooseSwapchainPresentMode(const std::vector<VkPresentModeKHR>&
     }
   }
 
-  std::cout<< "using default immidiate mode presentation" << std::endl;
+  kaze::logInfo("using default immidiate mode presentation");
   return VK_PRESENT_MODE_IMMEDIATE_KHR;
 }
 
@@ -392,7 +406,6 @@ kaze::chooseSwapchainExtent(const VkSurfaceCapabilitiesKHR& capabilities,
   } else {
     int width, height;
     SDL_GetWindowSizeInPixels(window, &width, &height);
-    std::cout << width << " x " << height << std::endl;
     VkExtent2D actualExtent = {
       static_cast<uint32_t> (width),
       static_cast<uint32_t> (height)
@@ -431,14 +444,11 @@ kaze::createSwapchain(const VkPhysicalDevice physicalDevice,
 
   uint32_t imageCount = swapchainSupportDetails.capabilities.minImageCount;
 
-  std::cout << "swapchain image min count: " << imageCount << std::endl;
+  kaze::logInfo(std::string("swapchain image min count") +
+                std::to_string(imageCount));
 
   if (swapchainSupportDetails.capabilities.maxImageCount != 0 &&
       imageCount > swapchainSupportDetails.capabilities.maxImageCount) {
-    std::cout<< "reached max swapchain count, setting it to: " 
-	     << swapchainSupportDetails.capabilities.maxImageCount
-	     << std::endl;
-
     imageCount = swapchainSupportDetails.capabilities.maxImageCount;
   }
 
@@ -466,12 +476,10 @@ kaze::createSwapchain(const VkPhysicalDevice physicalDevice,
     {indices.graphicsFamily.value(), indices.presentFamily.value()};
 
   if (indices.graphicsFamily != indices.presentFamily) {
-    std::cout << "graphics family is present family :)" << std::endl;
     createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
     createInfo.queueFamilyIndexCount = 2;
     createInfo.pQueueFamilyIndices = queueFamilyIndices;
   } else {
-    std::cout << "graphics family is not present family :(" << std::endl;
     createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     createInfo.queueFamilyIndexCount = 0; // Optional
     createInfo.pQueueFamilyIndices = nullptr; // Optional
@@ -656,11 +664,10 @@ createVertexInputStateInfo () {
   vertexInputCreateInfo.sType =
     VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
-  // TODO: THIS WILL BE CHANGED, since we will pass vertexes
-  vertexInputCreateInfo.vertexBindingDescriptionCount = 0;
+  vertexInputCreateInfo.vertexBindingDescriptionCount = 1;
   vertexInputCreateInfo.pVertexBindingDescriptions = nullptr;
 
-  vertexInputCreateInfo.vertexAttributeDescriptionCount = 0;
+  vertexInputCreateInfo.vertexAttributeDescriptionCount = 2;
   vertexInputCreateInfo.pVertexAttributeDescriptions = nullptr;
 
   return vertexInputCreateInfo;
@@ -736,8 +743,6 @@ VkRenderPass kaze::createRenderPass(VkFormat swapchainImageFormat,
   dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
   dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
-  
-  
   VkRenderPass renderpass;
 
   VkRenderPassCreateInfo renderPassInfo{};
@@ -761,7 +766,8 @@ VkRenderPass kaze::createRenderPass(VkFormat swapchainImageFormat,
 }
 
 std::pair<VkPipeline, VkPipelineLayout>
-kaze::createPipelineLayout(const PipelineCreationInfo info) {
+kaze::createPipelineLayout(const PipelineCreationInfo info,
+                           const VkPipelineVertexInputStateCreateInfo vertexInfo ) {
 
     const int dynamicStateCount = 2;
     VkDynamicState dynamicStates[dynamicStateCount] {
@@ -779,6 +785,8 @@ kaze::createPipelineLayout(const PipelineCreationInfo info) {
     dynamicState.pDynamicStates = dynamicStates;
 
     // how vertexes are passed.
+    VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = vertexInfo;
+    /* 
     VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo {};
     vertexInputCreateInfo.sType =
       VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -791,6 +799,7 @@ kaze::createPipelineLayout(const PipelineCreationInfo info) {
 
     vertexInputCreateInfo.vertexAttributeDescriptionCount = 0;
     vertexInputCreateInfo.pVertexAttributeDescriptions = nullptr;
+    */
 
     // input assembly - the topology of the passed triangles
     // for now, it will just be a basic triangles list.
@@ -810,7 +819,6 @@ kaze::createPipelineLayout(const PipelineCreationInfo info) {
     viewport.height = (float) info.swapchainExtent.height;
 
     // standard depth value.
-    // ERR?
     viewport.minDepth = 0.0f;
     // viewport.minDepth = 1.0f;
     viewport.maxDepth = 1.0f;
@@ -872,7 +880,6 @@ kaze::createPipelineLayout(const PipelineCreationInfo info) {
     pipelineInfo.pColorBlendState = &info.colorBlendStateInfo;
     pipelineInfo.pDynamicState = &dynamicState;
 
-
     pipelineInfo.layout = pipelineLayout;
 
     pipelineInfo.renderPass = info.renderPass;
@@ -920,8 +927,6 @@ kaze::createSwapchainFramebuffers
       kaze::errorExit("failed to create framebuffer!");
     }
   }
-
-  std::cout << swapchainFramebuffers[0] << std::endl;
 
   return swapchainFramebuffers;
 }
@@ -974,8 +979,8 @@ kaze::freeCommandBuffer(VkCommandPool commandPool,
 
 
 void
-kaze::startCommandBuffer(VkCommandBuffer cmdBuffer, VkFramebuffer frame,
-			 VkRenderPass renderPass, VkExtent2D extent) {
+kaze::startCommandBufferRenderPass(VkCommandBuffer cmdBuffer, VkFramebuffer frame,
+				   VkRenderPass renderPass, VkExtent2D extent) {
 
   // this guy 'renders' to a framebuffer, starts it atleast
 
@@ -1011,7 +1016,7 @@ kaze::startCommandBuffer(VkCommandBuffer cmdBuffer, VkFramebuffer frame,
 }
 
 void
-kaze::endCommandBuffer(VkCommandBuffer cmdBuffer) {
+kaze::endCommandBufferRenderPass(VkCommandBuffer cmdBuffer) {
   // de fuk is this guy supposed to be at?
   vkCmdEndRenderPass(cmdBuffer);
   if (vkEndCommandBuffer(cmdBuffer) != VK_SUCCESS) {
@@ -1039,7 +1044,7 @@ kaze::testBG(VkCommandBuffer cmdBuffer, VkPipeline graphicsPipeline,
   scissor.extent = extent;
 
   vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
-  vkCmdDraw(cmdBuffer, 3, 1, 0, 0);
+  //vkCmdDraw(cmdBuffer, 3, 1, 0, 0);
   // vertex count, !instance mode, vertex start index, instance start index
 }
 

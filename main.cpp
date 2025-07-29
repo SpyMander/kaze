@@ -1,27 +1,35 @@
 
 /*
 honestly this is a demo file for now. to check if everything is working
- */
+*/
 
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_init.h>
 #include <SDL3/SDL_oldnames.h>
 #include <SDL3/SDL_timer.h>
+#include <array>
+#include <cstddef>
 #include <cstdint>
-#include <iostream>
+#include <cstring>
 #include <vector>
 
 #include "error_handling.hpp"
+#include "glm/ext/vector_float3.hpp"
 #include "vulkan_init.hpp"
 #include "vulkan_validation_layers.hpp"
 #include "shaders.hpp"
+#include "logging.hpp"
 
-#include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan.h>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 #include <vulkan/vulkan_core.h>
+#define VMA_IMPLEMENTATION
+#include <vk_mem_alloc.h>
+#include <vulkan/vulkan_video.hpp>
+#include <glm/common.hpp>
+#include <glm/vec2.hpp>
 
 #define INITIAL_WIDTH 800
 #define INITIAL_HEIGHT 600
@@ -29,13 +37,94 @@ honestly this is a demo file for now. to check if everything is working
 #define KAZE_VALIDATION_LAYERS
 
 // no fps cap
-#define DEFAULT_PRESENT_MODE VK_PRESENT_MODE_IMMEDIATE_KHR
+//#define DEFAULT_PRESENT_MODE VK_PRESENT_MODE_IMMEDIATE_KHR
 
-//#define DEFAULT_PRESENT_MODE VK_PRESENT_MODE_FIFO_KHR
+#define DEFAULT_PRESENT_MODE VK_PRESENT_MODE_FIFO_KHR
+
+namespace kz = kaze;
+
+
+struct Vertex {
+  glm::vec3 pos;
+  glm::vec2 uv; 
+};
+
+// staged, static.
+std::pair<VkBuffer, VmaAllocation>
+uploadVertecies(VmaAllocator allocator, Vertex vertecies[], uint arrSize,
+                VkCommandPool cmdPool, VkDevice device,
+                VkQueue graphicsQueue) {
+
+  // vertex buffer
+  VkBufferCreateInfo bufferInfo {};
+  bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  bufferInfo.size = arrSize;
+  bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+    VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+  bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+  VmaAllocationCreateInfo allocationInfo {};
+  allocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+  VkBuffer vertexBuffer;
+  VmaAllocation vertexBufferAllocation;
+
+  vmaCreateBuffer(allocator, &bufferInfo, &allocationInfo, &vertexBuffer, &vertexBufferAllocation, nullptr);
+
+  // stage + transfer
+  VkBufferCreateInfo stagingBufferInfo = bufferInfo;
+  stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+  VmaAllocationCreateInfo stagingAllocInfo{};
+  stagingAllocInfo.usage = VMA_MEMORY_USAGE_CPU_ONLY;
+  stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+  VkBuffer stagingBuffer;
+  VmaAllocation stagingBufferAllocation;
+  VmaAllocationInfo stagingAllocInfo_out;
+
+  vmaCreateBuffer(allocator, &stagingBufferInfo, &stagingAllocInfo,
+		  &stagingBuffer, &stagingBufferAllocation, &stagingAllocInfo_out);
+
+  std::memcpy(stagingAllocInfo_out.pMappedData, vertecies, bufferInfo.size);
+
+  VkCommandBufferBeginInfo beginInfo {};
+  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+  auto cmdBuffer = kz::createCommandBuffer(cmdPool, device);
+
+  vkBeginCommandBuffer(cmdBuffer, &beginInfo);
+
+  VkBufferCopy copyRegion = {};
+  copyRegion.size = bufferInfo.size;
+  vkCmdCopyBuffer(cmdBuffer, stagingBuffer, vertexBuffer, 1, &copyRegion);
+
+  vkEndCommandBuffer(cmdBuffer);
+
+  // Submit and wait (simplified for example)
+  VkSubmitInfo submitInfo = {};
+  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submitInfo.commandBufferCount = 1;
+  submitInfo.pCommandBuffers = &cmdBuffer;
+
+
+  vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+  vkQueueWaitIdle(graphicsQueue);
+
+  return {vertexBuffer, vertexBufferAllocation};
+}
 
 int main() {
+  //kz::setLoggingMode(kz::LogFlagBits::Info | kz::LogFlagBits::Warn |
+  //                   kz::LogFlagBits::Fatal);
+
+  kz::setLoggingMode(kz::LogFlagBits::All);
+  kz::setLogFile("./logz.txt");
+
+  kz::logInfo("starting");
   #ifdef KAZE_VALIDATION_LAYERS
-  std::cout << "using validation layers" << std::endl;
+  kz::logInfo("using validation layers");
   const bool enableValidationLayers = true;
   #else
   const bool enableValidationLayers = false;
@@ -43,8 +132,8 @@ int main() {
   #endif
 
   if (enableValidationLayers) {
-    if (!kaze::checkValidationLayerSupport()) {
-      kaze::errorExit("the requested validation layers weren't found");
+    if (!kz::checkValidationLayerSupport()) {
+      kz::errorExit("the requested validation layers weren't found");
     }
   }
 
@@ -59,34 +148,33 @@ int main() {
   //| SDL_WINDOW_RESIZABLE
 
   if (!window) {
-    kaze::errorExit("couldn't create window");
+    kz::errorExit("couldn't create window");
   }
 
-  VkInstance vkInstance = kaze::createVkInstance(enableValidationLayers);
-  kaze::QueueFamilyIndices queueFamilyIndices;
+  VkInstance vkInstance = kz::createVkInstance(enableValidationLayers);
+  kz::QueueFamilyIndices queueFamilyIndices;
   VkPhysicalDevice physicalDevice;
   VkDevice device;
   VkQueue graphicsQueue;
   VkSurfaceKHR windowSurface;
   VkQueue presentQueue;
 
-
   //create window surface
   if (!SDL_Vulkan_CreateSurface(window, vkInstance, nullptr,
 			       &windowSurface)) {
-    kaze::errorExit("couldn't create window surface (sdl)");
+    kz::errorExit("couldn't create window surface (sdl)");
   }
  
 
   //get device
   std::tie(physicalDevice, queueFamilyIndices) =
-    kaze::getPhysicalDevice(vkInstance, windowSurface);
+    kz::getPhysicalDevice(vkInstance, windowSurface);
 
   if (!queueFamilyIndices.isComplete()) {
-    kaze::errorExit("queue family isn't complete");
+    kz::errorExit("queue family isn't complete");
   }
   // DEVICE creation
-  device = kaze::createVkDevice(physicalDevice, queueFamilyIndices);
+  device = kz::createVkDevice(physicalDevice, queueFamilyIndices);
 
   //that 0 means 0th queue index
   // TODO: put this in a kaze:: function
@@ -95,6 +183,16 @@ int main() {
 
   vkGetDeviceQueue(device, queueFamilyIndices.presentFamily.value(), 0,
   		   &presentQueue);
+  // vma
+  kz::logInfo("creating vma allocator");
+  VmaAllocatorCreateInfo vmaAllocatorInfo {};
+  vmaAllocatorInfo.device = device;
+  vmaAllocatorInfo.physicalDevice = physicalDevice;
+  vmaAllocatorInfo.instance = vkInstance;
+  vmaAllocatorInfo.vulkanApiVersion = VK_API_VERSION_1_0;
+
+  VmaAllocator vmaAllocator;
+  vmaCreateAllocator(&vmaAllocatorInfo, &vmaAllocator);
 
   VkSwapchainKHR swapchain;
   std::vector<VkImage> swapchainImages;
@@ -103,13 +201,13 @@ int main() {
 
   // crazy
   std::tie(swapchain, swapchainImages, swapchainImageFormat, swapchainExtent) =
-      kaze::createSwapchain(physicalDevice, device, windowSurface, window,
+      kz::createSwapchain(physicalDevice, device, windowSurface, window,
                             queueFamilyIndices,
                             DEFAULT_PRESENT_MODE);
 
   std::vector<VkImageView> swapchainImageViews;
   swapchainImageViews =
-    kaze::createSwapchainImageViews(swapchainImages, swapchainImageFormat,
+    kz::createSwapchainImageViews(swapchainImages, swapchainImageFormat,
 				    device);
   // pipelinez
   // these dudes need to be freed
@@ -122,13 +220,13 @@ int main() {
   // these guys will free themselfs when out of scope, which isn't now
   std::string basePath(SDL_GetBasePath());
 
-  std::unique_ptr<kaze::Shader> vertShader =
-    std::make_unique<kaze::Shader>(basePath + "basic.vert.spv", device,
-				   kaze::vertexShaderStage);
+  std::unique_ptr<kz::Shader> vertShader =
+    std::make_unique<kz::Shader>(basePath + "basic.vert.spv", device,
+				   kz::vertexShaderStage);
 
-  std::unique_ptr<kaze::Shader> fragShader =
-    std::make_unique<kaze::Shader>(basePath + "basic.frag.spv", device,
-				   kaze::fragmentShaderStage);
+  std::unique_ptr<kz::Shader> fragShader =
+    std::make_unique<kz::Shader>(basePath + "basic.frag.spv", device,
+				   kz::fragmentShaderStage);
 
   VkPipelineShaderStageCreateInfo pipelineShaderStageInfos[2] = {
     fragShader->getShaderStageInfo(),
@@ -136,17 +234,17 @@ int main() {
   };
   // ---
 
-  kaze::ColorBlendInfo colorBlendInfo =
-    kaze::createColorBlendInfo();
+  kz::ColorBlendInfo colorBlendInfo =
+    kz::createColorBlendInfo();
     
   VkPipelineRasterizationStateCreateInfo rasterizerInfo;
-  rasterizerInfo = kaze::createRasterizationInfo(false);
+  rasterizerInfo = kz::createRasterizationInfo(false);
 
   // need to destroy
   renderPass =
-    kaze::createRenderPass(swapchainImageFormat, device);
+    kz::createRenderPass(swapchainImageFormat, device);
     
-  kaze::PipelineCreationInfo pipelineInfo {};
+  kz::PipelineCreationInfo pipelineInfo {};
   pipelineInfo.device = device;
   pipelineInfo.stageCount = 2;
   pipelineInfo.shaderStageInfo = pipelineShaderStageInfos;
@@ -155,18 +253,54 @@ int main() {
   pipelineInfo.colorBlendStateInfo = colorBlendInfo.createInfo;
   pipelineInfo.rasterizerInfo = rasterizerInfo;
 
+  // vertex stuff;
+
+  VkVertexInputBindingDescription vertexBinding = {};
+  vertexBinding.binding = 0;
+  vertexBinding.stride = sizeof(Vertex);
+  vertexBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+  std::array<VkVertexInputAttributeDescription, 2> vertexAttributes {};
+  vertexAttributes[0].binding = 0;
+  vertexAttributes[0].location = 0;
+  vertexAttributes[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+  vertexAttributes[0].offset = offsetof(Vertex, pos);
+
+  vertexAttributes[1].binding = 0;
+  vertexAttributes[1].location = 1;
+  vertexAttributes[1].format = VK_FORMAT_R32G32_SFLOAT;
+  vertexAttributes[1].offset = offsetof(Vertex, uv);
+
+  VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo {};
+  vertexInputCreateInfo.sType =
+    VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+  vertexInputCreateInfo.vertexBindingDescriptionCount = 1;
+  vertexInputCreateInfo.pVertexBindingDescriptions = &vertexBinding;
+
+  vertexInputCreateInfo.vertexAttributeDescriptionCount = 2;
+  vertexInputCreateInfo.pVertexAttributeDescriptions = &vertexAttributes[0];
+  // finally creating pipeline
 
   std::tie(graphicsPipeline, pipelineLayout) =
-    kaze::createPipelineLayout(pipelineInfo);
+    kz::createPipelineLayout(pipelineInfo, vertexInputCreateInfo);
 
   swapchainFramebuffers =
-    kaze::createSwapchainFramebuffers(swapchainImageViews,
+    kz::createSwapchainFramebuffers(swapchainImageViews,
 				      swapchainExtent, renderPass,
 				      device);
 
   // one of this dude
   VkCommandPool cmdPool =
-    kaze::createCommandPool(queueFamilyIndices, device);
+    kz::createCommandPool(queueFamilyIndices, device);
+
+  Vertex testVerts[] = {
+    {glm::vec3(-0.5,-0.5,0), glm::vec2(0,0)},
+    {glm::vec3(0.5,0.5,0), glm::vec2(0,1)},
+    {glm::vec3(0.5,-0.5,0), glm::vec2(1,0)}
+  };
+
+  VkBuffer vertexBuffer = uploadVertecies(vmaAllocator, testVerts, 3 * sizeof(testVerts), cmdPool, device, graphicsQueue).first;
 
   std::vector<VkCommandBuffer> cmdBuffers(swapchainImages.size());
   std::vector<VkSemaphore> imageAvailableSemaphores(swapchainImages.size());
@@ -178,16 +312,15 @@ int main() {
   for (uint i{}; i < swapchainImages.size(); i++) {
     // each for swapchain image.
     cmdBuffers[i] =
-      kaze::createCommandBuffer(cmdPool, device);
+      kz::createCommandBuffer(cmdPool, device);
 
-    imageAvailableSemaphores[i] = kaze::createSemaphore(device);
-    renderFinishedSemaphores[i] = kaze::createSemaphore(device);
+    imageAvailableSemaphores[i] = kz::createSemaphore(device);
+    renderFinishedSemaphores[i] = kz::createSemaphore(device);
 
     // signals when a frame is finished.
-    inFlightFences[i] = kaze::createFence(device, true);
+    inFlightFences[i] = kz::createFence(device, true);
 
   }
-  std::cout << "get ready for the loop." << std::endl;
   uint32_t currentFrame = 0;
   // --- drawing shit.
   SDL_Event event;
@@ -196,7 +329,7 @@ int main() {
 
     while (SDL_PollEvent(&event)) {
       if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
-      	std::cout << "close requestd" << std::endl;
+	kz::logInfo("close requestd");
 	running = false;
       }
     }
@@ -219,10 +352,14 @@ int main() {
     vkResetCommandBuffer(cmdBuffers[imageIndex], 0);
     
 
+    kz::startCommandBufferRenderPass(cmdBuffers[imageIndex], swapchainFramebuffers[imageIndex], renderPass, swapchainExtent);
+    kz::testBG(cmdBuffers[imageIndex], graphicsPipeline, swapchainExtent);
 
-    kaze::startCommandBuffer(cmdBuffers[imageIndex], swapchainFramebuffers[imageIndex], renderPass, swapchainExtent);
-    kaze::testBG(cmdBuffers[imageIndex], graphicsPipeline, swapchainExtent);
-    kaze::endCommandBuffer(cmdBuffers[imageIndex]);
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(cmdBuffers[imageIndex], 0, 1, &vertexBuffer, offsets);
+    vkCmdDraw(cmdBuffers[imageIndex], 3, 1, 0, 0);
+
+    kz::endCommandBufferRenderPass(cmdBuffers[imageIndex]);
 
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -242,7 +379,7 @@ int main() {
     submitInfo.pSignalSemaphores = signalSemaphores;
 
     if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
-      kaze::errorExit("couldn't submit command buffer");
+      kz::errorExit("couldn't submit command buffer");
     }
 
     VkPresentInfoKHR presentInfo{};
@@ -261,7 +398,6 @@ int main() {
 
     // window resize handle. it has to be down here because of sync complications
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR){
-      std::cout << "out of date!!!" << std::endl; 
       vkDeviceWaitIdle(device);
 
       for (auto imageView : swapchainImageViews) {
@@ -277,15 +413,15 @@ int main() {
 
       std::tie(swapchain, swapchainImages,
           swapchainImageFormat, swapchainExtent) =
-        kaze::createSwapchain(physicalDevice, device, windowSurface, window,
+        kz::createSwapchain(physicalDevice, device, windowSurface, window,
 			      queueFamilyIndices, DEFAULT_PRESENT_MODE);
 
       swapchainImageViews =
-        kaze::createSwapchainImageViews(swapchainImages, swapchainImageFormat,
+        kz::createSwapchainImageViews(swapchainImages, swapchainImageFormat,
             device);
 
       swapchainFramebuffers =
-        kaze::createSwapchainFramebuffers(swapchainImageViews,
+        kz::createSwapchainFramebuffers(swapchainImageViews,
             swapchainExtent, renderPass,
             device);
 

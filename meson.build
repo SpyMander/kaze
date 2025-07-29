@@ -8,8 +8,10 @@ src = [
   'vulkan_validation_layers.cpp',
   'shaders.cpp',
   'error_handling.cpp',
+  'logging.cpp',
 ]
 
+fmt_dep = dependency('fmt', required: true)
 glm_dep = dependency('glm', required: true, fallback: ['glm'])
 vulkan_dep = dependency('vulkan', required: true)
 vma_dep = dependency('vulkan-memory-allocator', required: true)
@@ -22,4 +24,4 @@ sdl_dep = dependency('sdl3', required: true)
 
 #add_project_arguments('-g', language: 'cpp')
 executable('main', src,
-           dependencies: [ sdl_dep, vulkan_dep, vma_dep, glm_dep ])
+           dependencies: [ fmt_dep, sdl_dep, vulkan_dep, vma_dep, glm_dep ])
