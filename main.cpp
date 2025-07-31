@@ -15,21 +15,20 @@ honestly this is a demo file for now. to check if everything is working
 #include <vector>
 
 #include "error_handling.hpp"
-#include "glm/ext/vector_float3.hpp"
 #include "vulkan_init.hpp"
 #include "vulkan_validation_layers.hpp"
 #include "shaders.hpp"
 #include "logging.hpp"
+#include "vulkan_memory.hpp"
 
 #include <vulkan/vulkan.h>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 #include <vulkan/vulkan_core.h>
-#define VMA_IMPLEMENTATION
-#include <vk_mem_alloc.h>
 #include <vulkan/vulkan_video.hpp>
 #include <glm/common.hpp>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 #define INITIAL_WIDTH 800
 #define INITIAL_HEIGHT 600
@@ -48,73 +47,6 @@ struct Vertex {
   glm::vec3 pos;
   glm::vec2 uv; 
 };
-
-// staged, static.
-std::pair<VkBuffer, VmaAllocation>
-uploadVertecies(VmaAllocator allocator, Vertex vertecies[], uint arrSize,
-                VkCommandPool cmdPool, VkDevice device,
-                VkQueue graphicsQueue) {
-
-  // vertex buffer
-  VkBufferCreateInfo bufferInfo {};
-  bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-  bufferInfo.size = arrSize;
-  bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
-    VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-  bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-  VmaAllocationCreateInfo allocationInfo {};
-  allocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-
-  VkBuffer vertexBuffer;
-  VmaAllocation vertexBufferAllocation;
-
-  vmaCreateBuffer(allocator, &bufferInfo, &allocationInfo, &vertexBuffer, &vertexBufferAllocation, nullptr);
-
-  // stage + transfer
-  VkBufferCreateInfo stagingBufferInfo = bufferInfo;
-  stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-
-  VmaAllocationCreateInfo stagingAllocInfo{};
-  stagingAllocInfo.usage = VMA_MEMORY_USAGE_CPU_ONLY;
-  stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
-  VkBuffer stagingBuffer;
-  VmaAllocation stagingBufferAllocation;
-  VmaAllocationInfo stagingAllocInfo_out;
-
-  vmaCreateBuffer(allocator, &stagingBufferInfo, &stagingAllocInfo,
-		  &stagingBuffer, &stagingBufferAllocation, &stagingAllocInfo_out);
-
-  std::memcpy(stagingAllocInfo_out.pMappedData, vertecies, bufferInfo.size);
-
-  VkCommandBufferBeginInfo beginInfo {};
-  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-  auto cmdBuffer = kz::createCommandBuffer(cmdPool, device);
-
-  vkBeginCommandBuffer(cmdBuffer, &beginInfo);
-
-  VkBufferCopy copyRegion = {};
-  copyRegion.size = bufferInfo.size;
-  vkCmdCopyBuffer(cmdBuffer, stagingBuffer, vertexBuffer, 1, &copyRegion);
-
-  vkEndCommandBuffer(cmdBuffer);
-
-  // Submit and wait (simplified for example)
-  VkSubmitInfo submitInfo = {};
-  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = &cmdBuffer;
-
-
-  vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-  vkQueueWaitIdle(graphicsQueue);
-
-  return {vertexBuffer, vertexBufferAllocation};
-}
-
 int main() {
   //kz::setLoggingMode(kz::LogFlagBits::Info | kz::LogFlagBits::Warn |
   //                   kz::LogFlagBits::Fatal);
@@ -300,7 +232,7 @@ int main() {
     {glm::vec3(0.5,-0.5,0), glm::vec2(1,0)}
   };
 
-  VkBuffer vertexBuffer = uploadVertecies(vmaAllocator, testVerts, 3 * sizeof(testVerts), cmdPool, device, graphicsQueue).first;
+  kz::GpuMemoryBuffer vertexBuffer = kz::uploadStaticVertecies(vmaAllocator, &testVerts, sizeof(testVerts), cmdPool, device, graphicsQueue);
 
   std::vector<VkCommandBuffer> cmdBuffers(swapchainImages.size());
   std::vector<VkSemaphore> imageAvailableSemaphores(swapchainImages.size());
@@ -356,7 +288,7 @@ int main() {
     kz::testBG(cmdBuffers[imageIndex], graphicsPipeline, swapchainExtent);
 
     VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(cmdBuffers[imageIndex], 0, 1, &vertexBuffer, offsets);
+    vkCmdBindVertexBuffers(cmdBuffers[imageIndex], 0, 1, &vertexBuffer.buffer, offsets);
     vkCmdDraw(cmdBuffers[imageIndex], 3, 1, 0, 0);
 
     kz::endCommandBufferRenderPass(cmdBuffers[imageIndex]);
@@ -441,7 +373,13 @@ int main() {
 
 
   // cleanup
-  // free shaders before anything else
+  kz::logInfo("cleanup");
+
+  vmaDestroyBuffer(vmaAllocator, vertexBuffer.buffer, vertexBuffer.bufferAllocation);
+  vmaDestroyBuffer(vmaAllocator, vertexBuffer.stagingBuffer, vertexBuffer.stagingAllocation);
+
+  vmaDestroyAllocator(vmaAllocator);
+
   vertShader.reset();
   fragShader.reset();
 
@@ -473,6 +411,7 @@ int main() {
   //vkDestroySurfaceKHR(vkInstance, windowSurface, nullptr);
   vkDestroySwapchainKHR(device, swapchain, nullptr);
   SDL_Vulkan_DestroySurface(vkInstance, windowSurface, nullptr);
+  kz::logInfo("destroying Device");
   vkDestroyDevice(device, nullptr);
   vkDestroyInstance(vkInstance, nullptr);
   SDL_DestroyWindow(window);

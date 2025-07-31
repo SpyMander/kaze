@@ -9,6 +9,7 @@ src = [
   'shaders.cpp',
   'error_handling.cpp',
   'logging.cpp',
+  'vulkan_memory.cpp',
 ]
 
 fmt_dep = dependency('fmt', required: true)

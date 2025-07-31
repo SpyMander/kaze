@@ -5,6 +5,7 @@ builddir/
 *.spv
 # subprojects/
 [#]*[#]
+[.][#]*
 *~
 .vscode/
 .meson_cache/

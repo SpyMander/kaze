@@ -5,3 +5,5 @@
 [KZINFO]  creating vma allocator
 [KZINFO]  swapchain image min count3
 [KZINFO]  close requestd
+[KZINFO]  cleanup
+[KZINFO]  destroying Device
