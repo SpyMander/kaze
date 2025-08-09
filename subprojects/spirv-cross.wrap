@@ -1,0 +1,10 @@
+[wrap-git]
+directory = spirv-cross
+url = https://github.com/KhronosGroup/SPIRV-Cross.git
+# if this becomes an issue, i will change. for now
+# im too lazy to find a commit. :)
+revision = main
+depth = 1
+
+[provide]
+spirv-cross = spirv_cross_dep

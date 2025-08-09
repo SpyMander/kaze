@@ -1,15 +1,15 @@
 #include"shaders.hpp"
-#include<vulkan/vulkan.h>
-#include<fstream>
-#include<filesystem>
-#include<iostream>
-#include<vector>
-
+#include <vulkan/vulkan.h>
+#include <fstream>
+#include <filesystem>
+#include <iostream>
+#include <spirv_cross.hpp>
+#include <spirv_glsl.hpp>
 
 // cursed function
 kaze::Shader::Shader(const std::string& filename, VkDevice _device,
 		     VkShaderStageFlagBits shaderStage)
-  : device(_device), shaderStage(shaderStage) {
+  : mDevice(_device), mShaderStage(shaderStage) {
 
   std::ifstream file(filename, std::ios::ate | std::ios::binary);
   if (!file.is_open()) {
@@ -21,12 +21,11 @@ kaze::Shader::Shader(const std::string& filename, VkDevice _device,
   size_t filesize = (size_t) file.tellg();
 
   // i dont get what .get is, but it works
-  std::unique_ptr<char[]> code =
-    std::make_unique<char[]>(filesize);
+  std::string code("",filesize);
 
   file.seekg(0);
   // one of the worst peice of shits ive written
-  file.read(code.get(), filesize);
+  file.read(code.data(), filesize);
   file.close();
 
   VkShaderModuleCreateInfo moduleCreateInfo {};
@@ -35,22 +34,22 @@ kaze::Shader::Shader(const std::string& filename, VkDevice _device,
 
   // read it as uint32 t, vulkans' type system is like this.
   moduleCreateInfo.pCode =
-    reinterpret_cast<const uint32_t*>(code.get());
+    reinterpret_cast<const uint32_t*>(code.c_str());
 
   VkShaderModule _shaderModule;
-  if (vkCreateShaderModule(device, &moduleCreateInfo, nullptr,
+  if (vkCreateShaderModule(mDevice, &moduleCreateInfo, nullptr,
 			   &_shaderModule) != VK_SUCCESS) {
     std::cerr << "couldn't make shader module" << std::endl;
   }
 
 
   // setting
-  shaderModule = _shaderModule;
-  pCode = std::move(code); 
+  mShaderModule = _shaderModule;
+  mCode = std::string(code);
 }
 
 kaze::Shader::~Shader() {
-  vkDestroyShaderModule(device, shaderModule, nullptr);
+  vkDestroyShaderModule(mDevice, mShaderModule, nullptr);
 }
 
 VkPipelineShaderStageCreateInfo
@@ -59,11 +58,24 @@ kaze::Shader::getShaderStageInfo() {
 
   shaderStageInfo.sType =
     VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-  shaderStageInfo.stage = shaderStage;
-  shaderStageInfo.module = shaderModule;
+  shaderStageInfo.stage = mShaderStage;
+  shaderStageInfo.module = mShaderModule;
   shaderStageInfo.pName = "main";
 
   // pSpecializationInfo, i dont think this will be added.
 
   return shaderStageInfo;
 }
+/*
+kaze::ShaderVariables
+kaze::Shader::getVariables() {
+  kaze::ShaderVariables variables;
+  spirv_cross::CompilerGLSL compiler(
+      reinterpret_cast<const uint32_t *>(mCode.data()),
+      mCode.length());
+  auto resources = compiler.get_shader_resources();
+
+    return variables;
+}
+
+*/

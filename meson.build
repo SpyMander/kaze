@@ -18,11 +18,15 @@ vulkan_dep = dependency('vulkan', required: true)
 vma_dep = dependency('vulkan-memory-allocator', required: true)
 sdl_dep = dependency('sdl3', required: true)
 
-#add_project_link_arguments([
-#  '-lvulkan',
-#  '-lSDL3'
-#], language: 'cpp')
+# shitty ass spirv-cross, old ass cmake
+cmake = import('cmake')
 
-#add_project_arguments('-g', language: 'cpp')
+# Configure CMake subproject
+spirv_cross_proj = cmake.subproject('spirv-cross', options: cmake.subproject_options())
+
+# Get the dependency
+spirv_cross_dep = spirv_cross_proj.dependency('spirv-cross-core')
+
 executable('main', src,
-           dependencies: [ fmt_dep, sdl_dep, vulkan_dep, vma_dep, glm_dep ])
+           dependencies: [ spirv_cross_dep, fmt_dep,
+	   sdl_dep, vulkan_dep, vma_dep, glm_dep ])

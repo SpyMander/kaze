@@ -11,7 +11,6 @@ honestly this is a demo file for now. to check if everything is working
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <vector>
 
 #include "error_handling.hpp"
@@ -214,6 +213,11 @@ int main() {
   vertexInputCreateInfo.pVertexAttributeDescriptions = &vertexAttributes[0];
   // finally creating pipeline
 
+  // TODO: make the pipeline layout thing a seperate function.
+  // it would be cool to have a funtion that generates a
+  // pipeline layout via shader reflection.
+  // also, returning a graphicsPipeline from a function that is called
+  // createPipelineLayout is bad.
   std::tie(graphicsPipeline, pipelineLayout) =
     kz::createPipelineLayout(pipelineInfo, vertexInputCreateInfo);
 

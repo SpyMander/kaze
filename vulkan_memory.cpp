@@ -74,14 +74,8 @@ kz::uploadStaticVertecies(VmaAllocator allocator,
   submitInfo.commandBufferCount = 1;
   submitInfo.pCommandBuffers = &cmdBuffer;
 
-
   vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
 
-
-  // i know some snobby ass, no life, bucktooth, lanky, stanky, neckbeard,
-  // wanna be developer, will say that this is bad since it blocks the cpu.
-  // well, if your so good at programming, why don't you fix it yourself? pls :D
-  vkQueueWaitIdle(graphicsQueue);
   return {
     vertexBuffer, vertexBufferAllocation,
     stagingBuffer, stagingBufferAllocation};
