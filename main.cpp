@@ -233,10 +233,21 @@ int main() {
   Vertex testVerts[] = {
     {glm::vec3(-0.5,-0.5,0), glm::vec2(0,0)},
     {glm::vec3(0.5,0.5,0), glm::vec2(0,1)},
-    {glm::vec3(0.5,-0.5,0), glm::vec2(1,0)}
+    {glm::vec3(0.5,-0.5,0), glm::vec2(1,0)},
+    {glm::vec3(-0.5,0.5,0), glm::vec2(1,1)}
   };
 
-  kz::GpuMemoryBuffer vertexBuffer = kz::uploadStaticVertecies(vmaAllocator, &testVerts, sizeof(testVerts), cmdPool, device, graphicsQueue);
+  kz::GpuMemoryBuffer vertexBuffer =
+      kz::uploadStaticData(vmaAllocator, &testVerts, sizeof(testVerts), cmdPool,
+                           device, graphicsQueue,
+                           VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+
+  std::uint16_t indicies[] = {
+    0, 1, 2, 2, 3, 0
+  };
+  kz::GpuMemoryBuffer indexBuffer = kz::uploadStaticData(
+      vmaAllocator, &indicies, sizeof(indicies), cmdPool, device, graphicsQueue,
+      VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 
   std::vector<VkCommandBuffer> cmdBuffers(swapchainImages.size());
   std::vector<VkSemaphore> imageAvailableSemaphores(swapchainImages.size());
@@ -293,7 +304,9 @@ int main() {
 
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(cmdBuffers[imageIndex], 0, 1, &vertexBuffer.buffer, offsets);
-    vkCmdDraw(cmdBuffers[imageIndex], 3, 1, 0, 0);
+    vkCmdBindIndexBuffer(cmdBuffers[imageIndex], indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT16);
+    //vkCmdDraw(cmdBuffers[imageIndex], 3, 1, 0, 0);
+    vkCmdDrawIndexed(cmdBuffers[imageIndex], 6, 1, 0, 0, 0);
 
     kz::endCommandBufferRenderPass(cmdBuffers[imageIndex]);
 
@@ -381,6 +394,9 @@ int main() {
 
   vmaDestroyBuffer(vmaAllocator, vertexBuffer.buffer, vertexBuffer.bufferAllocation);
   vmaDestroyBuffer(vmaAllocator, vertexBuffer.stagingBuffer, vertexBuffer.stagingAllocation);
+
+  vmaDestroyBuffer(vmaAllocator, indexBuffer.buffer, indexBuffer.bufferAllocation);
+  vmaDestroyBuffer(vmaAllocator, indexBuffer.stagingBuffer, indexBuffer.stagingAllocation);
 
   vmaDestroyAllocator(vmaAllocator);
 

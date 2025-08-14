@@ -14,7 +14,8 @@ namespace kaze {
   };
 
   GpuMemoryBuffer
-  uploadStaticVertecies(VmaAllocator allocator, void *vertexData,
-			std::size_t arrSize, VkCommandPool cmdPool,
-			VkDevice device, VkQueue graphicsQueue);
+  uploadStaticData(VmaAllocator allocator, void *data,
+		   std::size_t arrSize, VkCommandPool cmdPool,
+		   VkDevice device, VkQueue graphicsQueue,
+		   VkBufferUsageFlagBits usage);
 }

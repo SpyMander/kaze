@@ -9,16 +9,20 @@ namespace kz = kaze;
 // quick and dirty vertex uploader.
 // it's static, also it memcpy's, which might be bad.
 kz::GpuMemoryBuffer
-kz::uploadStaticVertecies(VmaAllocator allocator,
-			  void *vertexData,
-			  std::size_t arrSize,
-			  VkCommandPool cmdPool, VkDevice device,
-			  VkQueue graphicsQueue) {
+kz::uploadStaticData(VmaAllocator allocator, void *data,
+		     std::size_t arrSize,
+		     VkCommandPool cmdPool, VkDevice device,
+		     VkQueue graphicsQueue,
+		     VkBufferUsageFlagBits usage) {
   // vertex buffer
   VkBufferCreateInfo bufferInfo {};
   bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
   bufferInfo.size = arrSize;
-  bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+  // TODO: a bit of a problem, i dont know the bit operator
+  // to make that bit 1 no matter what, so now if the usage
+  // value has this bit 1, it will re flip it, causing an error
+  // i think.
+  bufferInfo.usage = usage |
     VK_BUFFER_USAGE_TRANSFER_DST_BIT;
   bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
@@ -54,7 +58,7 @@ kz::uploadStaticVertecies(VmaAllocator allocator,
     kz::errorExit("couldn't create staging buffer, vertex");
   }
 
-  std::memcpy(stagingAllocInfo_out.pMappedData, vertexData, bufferInfo.size);
+  std::memcpy(stagingAllocInfo_out.pMappedData, data, bufferInfo.size);
 
   VkCommandBufferBeginInfo beginInfo {};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
