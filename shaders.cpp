@@ -1,10 +1,9 @@
-#include"shaders.hpp"
+#include "shaders.hpp"
 #include <vulkan/vulkan.h>
 #include <fstream>
 #include <filesystem>
 #include <iostream>
-#include <spirv_cross.hpp>
-#include <spirv_glsl.hpp>
+#include "gitsubmodules.d/SPIRV-Reflect/spirv_reflect.h"
 
 // cursed function
 kaze::Shader::Shader(const std::string& filename, VkDevice _device,
@@ -66,16 +65,11 @@ kaze::Shader::getShaderStageInfo() {
 
   return shaderStageInfo;
 }
-/*
 kaze::ShaderVariables
 kaze::Shader::getVariables() {
   kaze::ShaderVariables variables;
-  spirv_cross::CompilerGLSL compiler(
-      reinterpret_cast<const uint32_t *>(mCode.data()),
-      mCode.length());
-  auto resources = compiler.get_shader_resources();
 
-    return variables;
+  
+  
+  return variables;
 }
-
-*/

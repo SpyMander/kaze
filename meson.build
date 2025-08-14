@@ -3,6 +3,8 @@ project('kaze', 'cpp',
 )
 
 src = [
+  #spirv reflection
+  'gitsubmodules.d/SPIRV-Reflect/spirv_reflect.cpp',
   'main.cpp',
   'vulkan_init.cpp',
   'vulkan_validation_layers.cpp',
@@ -17,16 +19,9 @@ glm_dep = dependency('glm', required: true, fallback: ['glm'])
 vulkan_dep = dependency('vulkan', required: true)
 vma_dep = dependency('vulkan-memory-allocator', required: true)
 sdl_dep = dependency('sdl3', required: true)
-
-# shitty ass spirv-cross, old ass cmake
-cmake = import('cmake')
-
-# Configure CMake subproject
-spirv_cross_proj = cmake.subproject('spirv-cross', options: cmake.subproject_options())
-
-# Get the dependency
-spirv_cross_dep = spirv_cross_proj.dependency('spirv-cross-core')
+#it's a git submodule.
+#spirv_reflect_dep = dependency('spirv-reflect', required: true)
 
 executable('main', src,
-           dependencies: [ spirv_cross_dep, fmt_dep,
+           dependencies: [fmt_dep,
 	   sdl_dep, vulkan_dep, vma_dep, glm_dep ])
