@@ -9,7 +9,6 @@ honestly this is a demo file for now. to check if everything is working
 #include <SDL3/SDL_oldnames.h>
 #include <SDL3/SDL_timer.h>
 #include <array>
-#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -46,6 +45,11 @@ struct Vertex {
   glm::vec3 pos;
   glm::vec2 uv; 
 };
+
+struct Ubo {
+  float colorOffset;
+};
+
 int main() {
   //kz::setLoggingMode(kz::LogFlagBits::Info | kz::LogFlagBits::Warn |
   //                   kz::LogFlagBits::Fatal);
@@ -145,6 +149,7 @@ int main() {
   VkRenderPass renderPass;
   VkPipeline graphicsPipeline;
   VkPipelineLayout pipelineLayout;
+
   std::vector<VkFramebuffer> swapchainFramebuffers;
 
   // --- shader stuff
@@ -158,6 +163,11 @@ int main() {
   std::unique_ptr<kz::Shader> fragShader =
     std::make_unique<kz::Shader>(basePath + "basic.frag.spv", device,
 				   kz::fragmentShaderStage);
+
+  kz::logInfo("logging frag shader info");
+  // not frag anymore
+  std::vector<VkDescriptorSetLayout> reflectedSetLayoutsVert =
+    vertShader->getVariables();
 
   VkPipelineShaderStageCreateInfo pipelineShaderStageInfos[2] = {
     fragShader->getShaderStageInfo(),
@@ -211,15 +221,29 @@ int main() {
 
   vertexInputCreateInfo.vertexAttributeDescriptionCount = 2;
   vertexInputCreateInfo.pVertexAttributeDescriptions = &vertexAttributes[0];
-  // finally creating pipeline
+  // finally creating pipelineLayout + pipeline
 
   // TODO: make the pipeline layout thing a seperate function.
   // it would be cool to have a funtion that generates a
   // pipeline layout via shader reflection.
   // also, returning a graphicsPipeline from a function that is called
   // createPipelineLayout is bad.
-  std::tie(graphicsPipeline, pipelineLayout) =
-    kz::createPipelineLayout(pipelineInfo, vertexInputCreateInfo);
+  VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+  pipelineLayoutInfo.sType =
+    VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+  // EXPERIMENTS!
+  pipelineLayoutInfo.setLayoutCount = reflectedSetLayoutsVert.size(); 
+  pipelineLayoutInfo.pSetLayouts = reflectedSetLayoutsVert.data();
+  pipelineLayoutInfo.pushConstantRangeCount = 0; // ALSO PUSH CONSTANTS.
+
+  // create pipeline layout
+  if (vkCreatePipelineLayout( device, &pipelineLayoutInfo, nullptr,
+			      &pipelineLayout) != VK_SUCCESS) {
+    kaze::errorExit("couldn't create pipline layout");
+  }
+
+  graphicsPipeline =
+    kz::createPipeline(pipelineInfo, vertexInputCreateInfo, pipelineLayout);
 
   swapchainFramebuffers =
     kz::createSwapchainFramebuffers(swapchainImageViews,
@@ -232,9 +256,9 @@ int main() {
 
   Vertex testVerts[] = {
     {glm::vec3(-0.5,-0.5,0), glm::vec2(0,0)},
-    {glm::vec3(0.5,0.5,0), glm::vec2(0,1)},
     {glm::vec3(0.5,-0.5,0), glm::vec2(1,0)},
-    {glm::vec3(-0.5,0.5,0), glm::vec2(1,1)}
+    {glm::vec3(0.5,0.5,0), glm::vec2(1,1)},
+    {glm::vec3(-0.5,0.5,0), glm::vec2(0,1)}
   };
 
   kz::GpuMemoryBuffer vertexBuffer =
@@ -243,11 +267,118 @@ int main() {
                            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
 
   std::uint16_t indicies[] = {
-    0, 1, 2, 2, 3, 0
+    0, 1, 2, 0, 3, 2
   };
   kz::GpuMemoryBuffer indexBuffer = kz::uploadStaticData(
       vmaAllocator, &indicies, sizeof(indicies), cmdPool, device, graphicsQueue,
       VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+
+  kz::logInfo("allocating descriptors");
+  kz::DeletionStack deletionStack;
+  // --- descriptors
+  std::vector<VkBuffer>      descBuffers(FRAMES_IN_FLIGHT);
+  std::vector<VmaAllocation> descBufferAllocations(FRAMES_IN_FLIGHT);
+  std::vector<Ubo>           Ubos(FRAMES_IN_FLIGHT, {0.5});
+
+  deletionStack.add([&]() -> void {
+    for (int i{}; i < FRAMES_IN_FLIGHT; i++) {
+      vmaUnmapMemory(vmaAllocator, descBufferAllocations[i]);
+      vmaDestroyBuffer(vmaAllocator, descBuffers[i], descBufferAllocations[i]);
+    }
+  });
+  for (std::uint32_t i{}; i < FRAMES_IN_FLIGHT; i++) {
+
+    VkBufferCreateInfo descriptorBufferInfo{};
+    descriptorBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    descriptorBufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    descriptorBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    descriptorBufferInfo.size = sizeof(Ubo);
+
+    VmaAllocationCreateInfo descriptorAllocationCreateInfo {};
+    // i think?
+    descriptorAllocationCreateInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    //stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+    // TODO: use this?
+    //VmaAllocationInfo allocationInfo{};
+    //allocationInfo.
+    
+    vmaCreateBuffer(vmaAllocator, &descriptorBufferInfo,
+                    &descriptorAllocationCreateInfo, &descBuffers[i],
+		    &descBufferAllocations[i], nullptr);
+
+    void* mappedData = nullptr;
+
+    vmaMapMemory(vmaAllocator, descBufferAllocations[i], &mappedData);
+
+    std::memcpy(mappedData, &Ubos[i], sizeof(Ubo));
+
+    vmaFlushAllocation(vmaAllocator, descBufferAllocations[i], 0, VK_WHOLE_SIZE);
+
+
+    // not unmaping
+  }
+  // ---
+  //VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT
+
+  VkDescriptorPoolSize poolSize{};
+  poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+  poolSize.descriptorCount = FRAMES_IN_FLIGHT; //if theres an error, here.
+
+  VkDescriptorPoolCreateInfo poolInfo{};
+  poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+  poolInfo.pPoolSizes = &poolSize;
+  poolInfo.poolSizeCount = 1;
+  poolInfo.maxSets = FRAMES_IN_FLIGHT;
+
+  VkDescriptorPool descriptorPool;
+  if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) !=
+      VK_SUCCESS) {
+    kz::errorExit("failed descriptor pool creation");
+  }
+  deletionStack.add([&]() -> void {
+    vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+  });
+
+  std::vector<VkDescriptorSet> descriptorSets(FRAMES_IN_FLIGHT);
+  // for some reason he used reserve here.
+
+  //cheating
+  std::vector<VkDescriptorSetLayout> layouts(FRAMES_IN_FLIGHT, reflectedSetLayoutsVert[0]); 
+  VkDescriptorSetAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+  allocInfo.descriptorPool = descriptorPool;
+  allocInfo.descriptorSetCount = static_cast<uint32_t>(FRAMES_IN_FLIGHT);
+  allocInfo.pSetLayouts = layouts.data();
+
+  if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
+    kz::errorExit("failed to allocate descriptor sets!");
+  }
+  deletionStack.add([&]() -> void {
+    for (auto& descriptorLayout : reflectedSetLayoutsVert) {
+      vkDestroyDescriptorSetLayout(device, descriptorLayout, nullptr);
+    }
+  });
+
+  for (int i{}; i < FRAMES_IN_FLIGHT; i++) {
+
+    VkDescriptorBufferInfo bufferInfo{};
+    bufferInfo.buffer = descBuffers[i];
+    bufferInfo.offset = 0;
+    bufferInfo.range = sizeof(Ubo);
+    // VK_WHOLE_SIZE;?
+
+    VkWriteDescriptorSet write{};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    write.descriptorCount = 1;
+    write.dstSet = descriptorSets[i];
+    write.dstBinding = 0;
+    write.dstArrayElement = 0;
+    write.pBufferInfo = &bufferInfo;
+
+    vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
+  }
 
   std::vector<VkCommandBuffer> cmdBuffers(swapchainImages.size());
   std::vector<VkSemaphore> imageAvailableSemaphores(swapchainImages.size());
@@ -276,7 +407,7 @@ int main() {
 
     while (SDL_PollEvent(&event)) {
       if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
-	kz::logInfo("close requestd");
+	kz::logInfo("close requested");
 	running = false;
       }
     }
@@ -306,6 +437,9 @@ int main() {
     vkCmdBindVertexBuffers(cmdBuffers[imageIndex], 0, 1, &vertexBuffer.buffer, offsets);
     vkCmdBindIndexBuffer(cmdBuffers[imageIndex], indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT16);
     //vkCmdDraw(cmdBuffers[imageIndex], 3, 1, 0, 0);
+
+    vkCmdBindDescriptorSets(cmdBuffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
+
     vkCmdDrawIndexed(cmdBuffers[imageIndex], 6, 1, 0, 0, 0);
 
     kz::endCommandBufferRenderPass(cmdBuffers[imageIndex]);
@@ -392,12 +526,16 @@ int main() {
   // cleanup
   kz::logInfo("cleanup");
 
+  deletionStack.deleteAll();
+  kz::logInfo("ended stack deletion");
+
   vmaDestroyBuffer(vmaAllocator, vertexBuffer.buffer, vertexBuffer.bufferAllocation);
   vmaDestroyBuffer(vmaAllocator, vertexBuffer.stagingBuffer, vertexBuffer.stagingAllocation);
 
   vmaDestroyBuffer(vmaAllocator, indexBuffer.buffer, indexBuffer.bufferAllocation);
   vmaDestroyBuffer(vmaAllocator, indexBuffer.stagingBuffer, indexBuffer.stagingAllocation);
 
+  kz::logInfo("deleting allocator!");
   vmaDestroyAllocator(vmaAllocator);
 
   vertShader.reset();

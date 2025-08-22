@@ -1,9 +1,0 @@
-[KZINFO]  log file wasn't here, so i created one.
-[KZINFO]  starting
-[KZINFO]  using validation layers
-[KZWARN]  integrated gpu's might have bugs!
-[KZINFO]  creating vma allocator
-[KZINFO]  swapchain image min count3
-[KZINFO]  close requestd
-[KZINFO]  cleanup
-[KZINFO]  destroying Device

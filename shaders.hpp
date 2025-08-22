@@ -34,23 +34,24 @@ namespace kaze {
 
   public:
     Shader(const std::string& filename, VkDevice device,
-	   VkShaderStageFlagBits shaderStage);
+	   const VkShaderStageFlagBits shaderStage);
     ~Shader();
 
     VkPipelineShaderStageCreateInfo
     getShaderStageInfo();
 
-    ShaderVariables
+    std::vector<VkDescriptorSetLayout>
     getVariables();
 
   private:
     // TODO: uniform informations
     // TODO: check if the passed shader stage is real.
-    VkDevice mDevice;
+    const VkDevice mDevice;
+    const VkShaderStageFlagBits mShaderStage;
     VkShaderModule mShaderModule;
-    VkShaderStageFlagBits mShaderStage;
     std::string mCode;
   };
+
 
   // xxx THIS CODE IS GOING TO BE DELETED? IF NO USE IS FOUND!
   class PipelineShaders {

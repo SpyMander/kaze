@@ -1,14 +1,23 @@
 #include "shaders.hpp"
+#include "error_handling.hpp"
+#include <cstddef>
+#include <cstdint>
+#include <string>
 #include <vulkan/vulkan.h>
 #include <fstream>
 #include <filesystem>
 #include <iostream>
+#include <vulkan/vulkan_core.h>
 #include "gitsubmodules.d/SPIRV-Reflect/spirv_reflect.h"
 
+// remove later (this include)
+#include "logging.hpp"
+
+
 // cursed function
-kaze::Shader::Shader(const std::string& filename, VkDevice _device,
-		     VkShaderStageFlagBits shaderStage)
-  : mDevice(_device), mShaderStage(shaderStage) {
+kaze::Shader::Shader(const std::string& filename, VkDevice t_device,
+		     const VkShaderStageFlagBits shaderStage)
+  : mDevice(t_device), mShaderStage(shaderStage) {
 
   std::ifstream file(filename, std::ios::ate | std::ios::binary);
   if (!file.is_open()) {
@@ -17,7 +26,7 @@ kaze::Shader::Shader(const std::string& filename, VkDevice _device,
   }
 
   // the curser is at the end, tellg tells us where it at.
-  size_t filesize = (size_t) file.tellg();
+  size_t filesize = static_cast<ssize_t>(file.tellg());
 
   // i dont get what .get is, but it works
   std::string code("",filesize);
@@ -65,11 +74,72 @@ kaze::Shader::getShaderStageInfo() {
 
   return shaderStageInfo;
 }
-kaze::ShaderVariables
-kaze::Shader::getVariables() {
-  kaze::ShaderVariables variables;
 
-  
-  
-  return variables;
+// WE SHOULD RETURN A DESCRIPTOR SET LAYOUT
+// + block info. a pair maybe
+// DO NOT CALL THIS EVERY FRAME
+// call it once.
+std::vector<VkDescriptorSetLayout>
+kaze::Shader::getVariables() {
+
+  SpvReflectShaderModule shaderModule;
+  SpvReflectResult result =
+    spvReflectCreateShaderModule(mCode.size(), mCode.data(), &shaderModule);
+
+  if (result != SPV_REFLECT_RESULT_SUCCESS) {
+    kaze::errorExit("couldn't create reflect shader module");
+  }
+    
+  std::uint32_t descriptorSetCount;
+  spvReflectEnumerateDescriptorSets(&shaderModule, &descriptorSetCount, nullptr);
+
+  std::vector<SpvReflectDescriptorSet*> descriptorSets(descriptorSetCount);
+
+  spvReflectEnumerateDescriptorSets(&shaderModule, &descriptorSetCount, descriptorSets.data());
+
+  std::vector<VkDescriptorSetLayout> setLayouts(descriptorSetCount);
+
+  for (std::uint32_t setIndex{}; setIndex < descriptorSetCount; setIndex++ ) {
+
+    auto set = descriptorSets[setIndex];
+
+    std::vector<VkDescriptorSetLayoutBinding> layoutBindings(set->binding_count);
+
+    for (std::uint32_t bind{}; bind < set->binding_count; bind++) {
+      //kaze::logInfo(set->bindings[bind]->name);
+      //kaze::logInfo(set->bindings[bind]->block.members[0].name);
+      kaze::logInfo("wtf is descriptor count?");
+      kaze::logInfo(set->bindings[bind]->block.members[0].name);
+
+      auto descriptorBinding = set->bindings[bind];
+
+      layoutBindings[bind].binding = descriptorBinding->binding;
+      // possible error
+      layoutBindings[bind].descriptorCount = descriptorBinding->count;
+      layoutBindings[bind].stageFlags = mShaderStage;
+
+      layoutBindings[bind].descriptorType =
+	static_cast<VkDescriptorType>(descriptorBinding->descriptor_type);
+
+
+
+      // immutable samplers are set to default for now.
+    }
+
+    VkDescriptorSetLayoutCreateInfo setLayoutCreateInfo {};
+    setLayoutCreateInfo.bindingCount = set->binding_count;
+    setLayoutCreateInfo.pBindings = layoutBindings.data();
+    setLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+
+    auto result =
+        vkCreateDescriptorSetLayout(mDevice, &setLayoutCreateInfo, nullptr,
+				    &setLayouts[setIndex]);
+
+    if (result != VK_SUCCESS) kaze::errorExit("couldn't create descriptor set layout");
+
+  }
+
+  spvReflectDestroyShaderModule(&shaderModule);
+
+  return setLayouts;
 }

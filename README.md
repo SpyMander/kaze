@@ -10,6 +10,8 @@ GLM <br />
 # BUILD
 
 ```
+git submodule init
+git submodule update
 meson setup build
 meson compile -C build
 // ! COMPILE THE SHADERS ! (that is the next step!)

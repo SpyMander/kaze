@@ -643,6 +643,7 @@ kaze::createRasterizationInfo(bool wireframe) {
   // backface culling
   // this might cause errors but i wont cull the backface
   // VK_CULL_MODE_BACK_BIT for backface culling
+  // TODO: make this editable
   rasterizer.cullMode = VK_CULL_MODE_NONE;
   rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
 
@@ -745,6 +746,7 @@ VkRenderPass kaze::createRenderPass(VkFormat swapchainImageFormat,
 
   VkRenderPass renderpass;
 
+  // change when making a AAA game.
   VkRenderPassCreateInfo renderPassInfo{};
   renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
   // kinda hardcoded.
@@ -765,9 +767,10 @@ VkRenderPass kaze::createRenderPass(VkFormat swapchainImageFormat,
   return renderpass;
 }
 
-std::pair<VkPipeline, VkPipelineLayout>
-kaze::createPipelineLayout(const PipelineCreationInfo info,
-                           const VkPipelineVertexInputStateCreateInfo vertexInfo ) {
+VkPipeline
+kaze::createPipeline(const PipelineCreationInfo info,
+		     const VkPipelineVertexInputStateCreateInfo vertexInfo,
+		     const VkPipelineLayout layout) {
 
     const int dynamicStateCount = 2;
     VkDynamicState dynamicStates[dynamicStateCount] {
@@ -786,29 +789,20 @@ kaze::createPipelineLayout(const PipelineCreationInfo info,
 
     // how vertexes are passed.
     VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = vertexInfo;
-    /* 
-    VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo {};
-    vertexInputCreateInfo.sType =
-      VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-
-    // HARDCODED
-    // TODO: THIS WILL BE CHANGED, since we will pass vertexes
-    // CHANGED !!! 
-    vertexInputCreateInfo.vertexBindingDescriptionCount = 0;
-    vertexInputCreateInfo.pVertexBindingDescriptions = nullptr;
-
-    vertexInputCreateInfo.vertexAttributeDescriptionCount = 0;
-    vertexInputCreateInfo.pVertexAttributeDescriptions = nullptr;
-    */
 
     // input assembly - the topology of the passed triangles
     // for now, it will just be a basic triangles list.
+    // i think this effects indexing.
+
+    auto inputAssembly = createInputAssemblyStateinfo();
+    /* my functions are all over the place.
     VkPipelineInputAssemblyStateCreateInfo inputAssembly {};
     inputAssembly.sType =
       VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 
     inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     inputAssembly.primitiveRestartEnable = VK_FALSE;
+    */
 
     // TODO: viewport creation should be more abstract
     VkViewport viewport {};
@@ -853,6 +847,7 @@ kaze::createPipelineLayout(const PipelineCreationInfo info,
     multisampling.alphaToCoverageEnable = VK_FALSE; // O
     multisampling.alphaToOneEnable = VK_FALSE; // O
 
+    /*
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType =
       VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -865,6 +860,8 @@ kaze::createPipelineLayout(const PipelineCreationInfo info,
 			       &pipelineLayout) != VK_SUCCESS) {
       kaze::errorExit("couldn't create pipline layout");
     }
+    this doesn't belong here.
+    */
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -880,12 +877,13 @@ kaze::createPipelineLayout(const PipelineCreationInfo info,
     pipelineInfo.pColorBlendState = &info.colorBlendStateInfo;
     pipelineInfo.pDynamicState = &dynamicState;
 
-    pipelineInfo.layout = pipelineLayout;
+    pipelineInfo.layout = layout;
 
     pipelineInfo.renderPass = info.renderPass;
     pipelineInfo.subpass = 0;
 
-    // used to make derived pipelines
+    // used to make derived pipelines, i dont think that's
+    // a good idea honestly, "why so complicated?" - jorker
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
     pipelineInfo.basePipelineIndex = -1; // Optional
 
@@ -897,7 +895,7 @@ kaze::createPipelineLayout(const PipelineCreationInfo info,
       kaze::errorExit("failed to create graphics pipeline!");
     }
 
-    return {graphicsPipeline, pipelineLayout};
+    return graphicsPipeline;
 }
 
 std::vector<VkFramebuffer>

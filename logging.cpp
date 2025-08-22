@@ -22,6 +22,10 @@ const fmt::text_style gWarnColor = fmt::fg(fmt::color::yellow);
 const char gFatalText[] = "[KZFATAL] ";
 const fmt::text_style gFatalColor = fmt::fg(fmt::color::red);
 
+
+// TODO:
+// template<typename... T> + std::forward<T>
+// and better print system.
 void kaze::logInfo(const std::string& m) {
   if (gLogFlags & kaze::LogFlagBits::Info) {
     fmt::print(fmt::emphasis::bold | gInfoColor, "{}", gInfoText);

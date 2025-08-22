@@ -105,9 +105,10 @@ namespace kaze {
   VkRenderPass createRenderPass(VkFormat swapchainImageFormat,
 				VkDevice device);
 
-  std::pair<VkPipeline, VkPipelineLayout>
-  createPipelineLayout(const PipelineCreationInfo info,
-		       const VkPipelineVertexInputStateCreateInfo vertexInfo);
+  VkPipeline
+  createPipeline(const PipelineCreationInfo info,
+		 const VkPipelineVertexInputStateCreateInfo vertexInfo,
+		 const VkPipelineLayout layout);
 
   std::vector<VkFramebuffer>
   createSwapchainFramebuffers

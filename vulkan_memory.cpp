@@ -6,8 +6,38 @@
 
 namespace kz = kaze;
 
+kz::DeletionStack::DeletionStack() {
+  // nothing?
+}
+
+void
+kz::DeletionStack::add(std::function<void()> t_deletionFunction) {
+  mStack.push(t_deletionFunction);
+}
+
+void
+kz::DeletionStack::deleteAll() {
+  while (!mStack.empty()) {
+    std::function<void()> function = mStack.top();
+    function();
+
+    mStack.pop();
+  }
+}
+
+kz::DeletionStack::~DeletionStack() {
+  deleteAll();
+}
+
+
 // quick and dirty vertex uploader.
 // it's static, also it memcpy's, which might be bad.
+// it keeps the staging buffer
+
+// TODO: it wouldn't be hard to not memcpy and use the
+// *data. I mean map the *data. this would make it faster.
+// for just uploading only, vmaCopyMemoryToAllocation should
+// be used.
 kz::GpuMemoryBuffer
 kz::uploadStaticData(VmaAllocator allocator, void *data,
 		     std::size_t arrSize,
@@ -27,6 +57,7 @@ kz::uploadStaticData(VmaAllocator allocator, void *data,
   bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
   VmaAllocationCreateInfo allocationInfo {};
+  // depricated??? why are they keeping it then?
   allocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
   VkBuffer vertexBuffer;
@@ -84,3 +115,5 @@ kz::uploadStaticData(VmaAllocator allocator, void *data,
     vertexBuffer, vertexBufferAllocation,
     stagingBuffer, stagingBufferAllocation};
 }
+
+
